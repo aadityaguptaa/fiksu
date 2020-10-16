@@ -24,13 +24,20 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import com.yalantis.ucrop.UCrop;
+
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 
 public class MainActivity extends AppCompatActivity {
 
     public String currentPhotoPath;
     public Bitmap mSelectedImage;
+    private final int CODE_IMG_GALLERY = 1;
+    private final String SAMPLE_CROPPED_IMG_NAME = "SampleCropImg";
+    public ImageView imageView;
+    public Uri imageUri;
 
 
 
@@ -39,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        imageView = findViewById(R.id.imageView);
         if(ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA)!= PackageManager.PERMISSION_GRANTED){
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{
                     Manifest.permission.CAMERA
@@ -59,12 +67,21 @@ public class MainActivity extends AppCompatActivity {
                     Uri imageUri = FileProvider.getUriForFile(MainActivity.this, "com.example.fiksu.fileprovider", imageFile);
                     Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                     intent.putExtra(MediaStore.EXTRA_OUTPUT, imageUri);
-                    startActivityForResult(intent, 1);
+                    startActivityForResult(intent, 9852);
                 }catch (IOException e){
                     e.printStackTrace();
                 }
             }
         });
+
+        imageView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                startActivityForResult(new Intent().setAction(Intent.ACTION_GET_CONTENT).setType("image/*"), 1);
+            }
+        });
+
+
 
     }
 
@@ -72,17 +89,53 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent intent) {
         super.onActivityResult(requestCode, resultCode, intent);
 
-        if (resultCode == RESULT_OK && requestCode == 1) {
+        if (resultCode == RESULT_OK && requestCode == 9852) {
             final Bitmap bitmap = BitmapFactory.decodeFile(currentPhotoPath);
             if (bitmap != null) {
-                ImageView im = findViewById(R.id.imageView);
-                mSelectedImage = Bitmap.createScaledBitmap(bitmap, im.getWidth(), im.getHeight(), true);
-                im.setImageBitmap(mSelectedImage);
+                mSelectedImage = Bitmap.createScaledBitmap(bitmap, imageView.getWidth(), imageView.getHeight(), true);
+                imageView.setImageBitmap(mSelectedImage);
+                imageUri = intent.getData();
+            }
+        }else if(resultCode == RESULT_OK && requestCode == 1){
+
+            Uri imageUri = intent.getData();
+            if(imageUri != null){
+                startCrop(imageUri);
+            }
+        }else if(requestCode == UCrop.REQUEST_CROP && resultCode == RESULT_OK){
+            //
+            Uri imageUri = UCrop.getOutput(intent);
+            if(imageUri != null){
+                imageView.setImageURI(imageUri);
             }
         }
     }
 
-    //Request For Camera Permission
+    private void startCrop(Uri uri){
+        String destinationFileName = SAMPLE_CROPPED_IMG_NAME;
+        destinationFileName += ".jpg";
+
+        UCrop uCrop = UCrop.of(uri, Uri.fromFile(new File(getCacheDir(), destinationFileName)));
+
+        uCrop.withMaxResultSize(450, 450);
+        uCrop.withOptions(getCropOptions());
+        uCrop.start(MainActivity.this);
+    }
+
+    private UCrop.Options getCropOptions(){
+        UCrop.Options options = new UCrop.Options();
+        options.setCompressionQuality(70);
+
+        options.setHideBottomControls(false);
+        options.setFreeStyleCropEnabled(true);
+
+        options.setStatusBarColor(getResources().getColor(R.color.colorPrimaryDark));
+        options.setToolbarColor(getResources().getColor(R.color.colorPrimary));
+
+        return options;
+
+    }
+
 
 
 }
