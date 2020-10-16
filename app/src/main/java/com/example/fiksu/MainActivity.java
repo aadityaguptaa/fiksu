@@ -18,17 +18,30 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import com.google.common.io.ByteStreams;
+import com.microsoft.azure.cognitiveservices.vision.computervision.ComputerVisionClient;
+import com.microsoft.azure.cognitiveservices.vision.computervision.ComputerVisionManager;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.OcrLanguages;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.OcrLine;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.OcrRegion;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.OcrResult;
+import com.microsoft.azure.cognitiveservices.vision.computervision.models.OcrWord;
 import com.yalantis.ucrop.UCrop;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -38,6 +51,8 @@ public class MainActivity extends AppCompatActivity {
     private final String SAMPLE_CROPPED_IMG_NAME = "SampleCropImg";
     public ImageView imageView;
     public Uri imageUri;
+    String subscriptionKey = "4ca7b53995e041cbab318cbde301835e";
+    String endpoint ="https://dictdetection.cognitiveservices.azure.com/";
 
 
 
@@ -94,7 +109,18 @@ public class MainActivity extends AppCompatActivity {
             if (bitmap != null) {
                 mSelectedImage = Bitmap.createScaledBitmap(bitmap, imageView.getWidth(), imageView.getHeight(), true);
                 imageView.setImageBitmap(mSelectedImage);
-                imageUri = intent.getData();
+
+                AsyncTask<Void, Void, String> task = new AsyncTask<Void, Void, String>() {
+                    @Override
+                    protected String doInBackground(Void... voids) {
+                        ComputerVisionClient compVisClient = ComputerVisionManager.authenticate(subscriptionKey).withEndpoint(endpoint);
+                        String result = RecognizeTextOCRLocal(compVisClient);
+                        Log.i("ytu", result);
+                        return result;
+                    }
+                };
+
+                task.execute();
             }
         }else if(resultCode == RESULT_OK && requestCode == 1){
 
@@ -134,6 +160,66 @@ public class MainActivity extends AppCompatActivity {
 
         return options;
 
+    }
+
+    public String RecognizeTextOCRLocal(ComputerVisionClient client) {
+        Log.i("a", "-----------------------------------------------");
+        Log.i("a", "RECOGNIZE PRINTED TEXT");
+
+        // Replace this string with the path to your own image.
+        Bitmap icon = mSelectedImage;
+
+
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        icon.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(outputStream.toByteArray());
+
+        try {
+            byte[] localImageBytes = ByteStreams.toByteArray(inputStream);
+
+            OcrResult ocrResultLocal = client.computerVision().recognizePrintedTextInStream()
+                    .withDetectOrientation(true).withImage(localImageBytes).withLanguage(OcrLanguages.EN).execute();
+
+            Log.i("a", "\n");
+            Log.i("a", "Recognizing printed text from a local image with OCR ...");
+            Log.i("a", "\nLanguage: " + ocrResultLocal.language());
+            Log.i("a", "Text angle: %1.3f\n"+ ocrResultLocal.textAngle());
+            Log.i("a", "Orientation: " + ocrResultLocal.orientation());
+
+
+            boolean firstWord = true;
+            String res = new String();
+            int flag = 0;
+
+            for (OcrRegion reg : ocrResultLocal.regions()) {
+
+                for (OcrLine line : reg.lines()) {
+
+                    if(flag == 0 && line.words().size() == 1){
+                        continue;
+                    }else {
+                        flag = 1;
+                    }
+                    int lineChar = 0;
+                    for (OcrWord word : line.words()) {
+                        res += word.text() + " ";
+
+                    }
+                    res += "\n";
+
+
+                }
+                res+="\n";
+
+
+            }
+
+            return res;
+        }catch (Exception e){
+            Log.i("a", e.toString());
+        }
+        return null;
     }
 
 
